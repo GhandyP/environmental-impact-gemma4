@@ -1,0 +1,30 @@
+# Pi runtime / local agent state
+.atl/
+.pi/
+context.md
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+
+# Local outputs
+*.log
+*.tmp
+*.swp
+gemma4_eia_analysis.json
+environmental-impact-analysis-for-everyone.ipynb
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

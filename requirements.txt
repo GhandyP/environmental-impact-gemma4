@@ -1,0 +1,9 @@
+# Needs a recent Transformers build with Gemma 4 multimodal support.
+torch
+torchvision
+transformers>=5.5.0
+accelerate>=1.0.0
+sentencepiece>=0.2.0
+protobuf>=5.29.0
+pillow>=11.0.0
+jupyterlab>=4.0
