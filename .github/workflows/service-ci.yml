@@ -1,0 +1,40 @@
+name: service-ci
+
+on:
+  push:
+    paths:
+      - "service/**"
+      - ".github/workflows/service-ci.yml"
+  pull_request:
+    paths:
+      - "service/**"
+      - ".github/workflows/service-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: service/go.mod
+      - name: Build
+        working-directory: service
+        run: go build ./...
+      - name: Vet
+        working-directory: service
+        run: go vet ./...
+      - name: Test
+        working-directory: service
+        run: go test -race ./...
+      - name: Check formatting
+        working-directory: service
+        run: test -z "$(gofmt -l .)"
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build Docker image
+        run: docker build -t eia-service:ci ./service
