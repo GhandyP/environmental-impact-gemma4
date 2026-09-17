@@ -3,8 +3,10 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"image"
+	"image/color"
 	"image/png"
 	"mime/multipart"
 	"net/http"
@@ -40,6 +42,20 @@ const apiJSON = `{"hazard_level":"low","summary":"safe","confidence":0}`
 func pngBytes() []byte {
 	var b bytes.Buffer
 	png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 1, 1)))
+	return b.Bytes()
+}
+func noisyPNGBytes() []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			v := uint8((x*37 + y*53 + x*y*11) % 256)
+			img.SetRGBA(x, y, color.RGBA{v, v ^ 0x5a, v ^ 0xa5, 0xff})
+		}
+	}
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		panic(err)
+	}
 	return b.Bytes()
 }
 func multipartRequest(t *testing.T, data []byte, lang string) *http.Request {
@@ -95,13 +111,78 @@ func TestAnalyzeMultipartBodyLimit(t *testing.T) {
 	r.Header.Set("Content-Type", mw.FormDataContentType())
 	w := httptest.NewRecorder()
 	testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, 1024).ServeHTTP(w, r)
-	if w.Code != http.StatusBadRequest {
+	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversized multipart body status %d, body %s", w.Code, w.Body)
+	}
+}
+func TestAnalyzeMultipartEnvelopeSlack(t *testing.T) {
+	var b bytes.Buffer
+	mw := multipart.NewWriter(&b)
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", `form-data; name="image"; filename="large.png"`)
+	h.Set("Content-Type", "image/png")
+	part, err := mw.CreatePart(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(bytes.Repeat([]byte{1}, 200<<10)); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/analyze", &b)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
+	w := httptest.NewRecorder()
+	testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, 1024).ServeHTTP(w, r)
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("multipart envelope status %d, body %s", w.Code, w.Body)
+	}
+}
+func TestAnalyzeMultipartEnvelopeAccepted(t *testing.T) {
+	var b bytes.Buffer
+	mw := multipart.NewWriter(&b)
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", `form-data; name="image"; filename="a-very-long-image-filename-that-expands-the-envelope.png"`)
+	h.Set("Content-Type", "image/png")
+	part, err := mw.CreatePart(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(pngBytes()); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		extra := make(textproto.MIMEHeader)
+		extra.Set("Content-Disposition", `form-data; name="extra-file"; filename="another-very-long-filename-that-expands-the-envelope-`+string(rune('a'+i))+`.txt"`)
+		extra.Set("Content-Type", "text/plain")
+		extraPart, err := mw.CreatePart(extra)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := extraPart.Write([]byte("extra")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 20; i++ {
+		if err := mw.WriteField("extra-"+strings.Repeat("x", 32)+string(rune('a'+i)), strings.Repeat("v", 1024)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/analyze", &b)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
+	w := httptest.NewRecorder()
+	testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, 4096).ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("multipart envelope accepted status %d, body %s", w.Code, w.Body)
 	}
 }
 func TestAnalyzeBadInputs(t *testing.T) {
 	h := testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, 100)
-	for _, data := range [][]byte{{1, 2, 3}, bytes.Repeat([]byte{1}, 101)} {
+	for _, data := range [][]byte{{1, 2, 3}} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, multipartRequest(t, data, "en"))
 		if w.Code != 400 {
@@ -109,9 +190,45 @@ func TestAnalyzeBadInputs(t *testing.T) {
 		}
 	}
 	w := httptest.NewRecorder()
+	h.ServeHTTP(w, multipartRequest(t, bytes.Repeat([]byte{1}, 101), "en"))
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("oversized image status %d", w.Code)
+	}
+	w = httptest.NewRecorder()
 	h.ServeHTTP(w, multipartRequest(t, pngBytes(), "xx"))
 	if w.Code != 400 {
 		t.Errorf("bad lang status %d", w.Code)
+	}
+}
+func TestAnalyzeJSONBody(t *testing.T) {
+	h := testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, 10000)
+	body := `{"image_b64":"` + base64.StdEncoding.EncodeToString(pngBytes()) + `","lang":"en"}`
+	r := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("small JSON status %d, body %s", w.Code, w.Body)
+	}
+
+	img := noisyPNGBytes()
+	body = `{"image_b64":"` + base64.StdEncoding.EncodeToString(img) + `","lang":"en"}`
+	r = httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, int64(len(img))).ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("noisy JSON status %d, image size %d, body %s", w.Code, len(img), w.Body)
+	}
+
+	largeB64 := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 200<<10))
+	body = `{"image_b64":"` + largeB64 + `","lang":"en"}`
+	r = httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, 1024).ServeHTTP(w, r)
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized JSON status %d, body %s", w.Code, w.Body)
 	}
 }
 func TestAnalyzeProviderErrors(t *testing.T) {
