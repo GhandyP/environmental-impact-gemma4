@@ -80,14 +80,15 @@ func (h *handler) analyze(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"provider": provider.Name(), "model": provider.Model(), "lang": string(l), "analysis": analysis})
 }
 func (h *handler) input(w http.ResponseWriter, r *http.Request) ([]byte, string, string, error) {
-	lang := r.FormValue("lang")
-	if lang == "" {
-		lang = "en"
-	}
+	lang := "en"
 	ct := r.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "multipart/form-data") {
+		r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxImageBytes+1024)
 		if err := r.ParseMultipartForm(h.cfg.MaxImageBytes + 1024); err != nil {
 			return nil, "", lang, err
+		}
+		if formLang := r.FormValue("lang"); formLang != "" {
+			lang = formLang
 		}
 		f, _, err := r.FormFile("image")
 		if err != nil {
