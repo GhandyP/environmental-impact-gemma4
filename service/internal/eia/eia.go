@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -36,6 +37,34 @@ type Analysis struct {
 	Confidence          float64  `json:"confidence"`
 }
 
+func (a *Analysis) Normalize() {
+	if a == nil {
+		return
+	}
+	a.Summary = strings.TrimSpace(a.Summary)
+	normalize := func(values []string) []string {
+		seen := make(map[string]struct{}, len(values))
+		cleaned := make([]string, 0, len(values))
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			cleaned = append(cleaned, value)
+		}
+		return cleaned
+	}
+	a.VisibleEvidence = normalize(a.VisibleEvidence)
+	a.LikelyImpactFactors = normalize(a.LikelyImpactFactors)
+	a.LikelyProcesses = normalize(a.LikelyProcesses)
+	a.Recommendations = normalize(a.Recommendations)
+	a.Uncertainty = normalize(a.Uncertainty)
+}
+
 func (a *Analysis) Validate() error {
 	if a == nil {
 		return errors.New("analysis is nil")
@@ -48,7 +77,7 @@ func (a *Analysis) Validate() error {
 	if strings.TrimSpace(a.Summary) == "" {
 		return errors.New("summary is empty")
 	}
-	if a.Confidence < 0 || a.Confidence > 1 {
+	if math.IsNaN(a.Confidence) || a.Confidence < 0 || a.Confidence > 1 {
 		return fmt.Errorf("confidence must be between 0 and 1")
 	}
 	return nil
@@ -130,6 +159,7 @@ func Extract(raw string) (*Analysis, error) {
 				if err := json.Unmarshal([]byte(raw[start:i+1]), &a); err != nil {
 					return nil, err
 				}
+				a.Normalize()
 				return &a, a.Validate()
 			}
 		}

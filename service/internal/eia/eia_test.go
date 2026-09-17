@@ -1,6 +1,7 @@
 package eia
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -20,6 +21,28 @@ func TestExtractValidationErrors(t *testing.T) {
 		if _, err := Extract(raw); err == nil {
 			t.Errorf("expected validation error for %s", raw)
 		}
+	}
+}
+func TestExtractNormalizesAnalysis(t *testing.T) {
+	raw := `{"hazard_level":"low","summary":"  A clear scene.  ","visible_evidence":["  soil  ","soil"," ","water"],"likely_impact_factors":[" runoff ","runoff",""],"likely_processes":[" erosion ","erosion"],"recommendations":[" monitor ","monitor","  "],"uncertainty":[" limited view ","limited view"],"confidence":0.8}`
+	a, err := Extract(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Summary != "A clear scene." || strings.Join(a.VisibleEvidence, ",") != "soil,water" || strings.Join(a.LikelyImpactFactors, ",") != "runoff" {
+		t.Fatalf("analysis was not normalized: %#v", a)
+	}
+}
+func TestExtractAcceptsSixVisibleEvidenceItems(t *testing.T) {
+	raw := strings.Replace(testJSON, `"soil"`, `"a","b","c","d","e","f"`, 1)
+	if _, err := Extract(raw); err != nil {
+		t.Fatalf("six visible evidence items should be accepted: %v", err)
+	}
+}
+func TestValidateRejectsNaNConfidence(t *testing.T) {
+	a := &Analysis{HazardLevel: "low", Summary: "summary", Confidence: math.NaN()}
+	if err := a.Validate(); err == nil {
+		t.Fatal("expected NaN confidence validation error")
 	}
 }
 func TestBuildPromptSpanishContract(t *testing.T) {
