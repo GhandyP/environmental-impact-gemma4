@@ -1,0 +1,8 @@
+# Build artifacts and local noise
+eia-service
+*.test
+*.out
+coverage*
+.tmp
+.git
+.gitignore
