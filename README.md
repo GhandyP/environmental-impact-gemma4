@@ -6,6 +6,7 @@ Kaggle-ready notebook demos for visual environmental impact assessment using Goo
 
 - `environmental-impact-analysis-for-everyone-gemma4.ipynb` — local/GPU notebook using the latest official Gemma 4 12B instruction-tuned model.
 - `environmental-impact-analysis-for-everyone-gemma4-kaggle.ipynb` — Kaggle-ready notebook with an embedded image and automatic fallback for smaller GPUs.
+- `service/` — Go REST API + bilingual web UI for the same image → assessment flow (hybrid local Gemma / Gemini / mock routing). See [`service/README.md`](service/README.md).
 - `assets/alfred_palmer_smokestacks.jpg` — reference image used by the notebooks.
 - `LICENSE` — MIT license for the repository code and notebooks.
 
