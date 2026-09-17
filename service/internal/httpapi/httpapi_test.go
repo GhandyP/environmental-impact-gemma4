@@ -72,6 +72,33 @@ func TestAnalyzeMultipart(t *testing.T) {
 		}
 	}
 }
+func TestAnalyzeMultipartBodyLimit(t *testing.T) {
+	var b bytes.Buffer
+	mw := multipart.NewWriter(&b)
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", `form-data; name="image"; filename="large.png"`)
+	h.Set("Content-Type", "image/png")
+	part, err := mw.CreatePart(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(bytes.Repeat([]byte{1}, 4096)); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.WriteField("image", string(pngBytes())); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/analyze", &b)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
+	w := httptest.NewRecorder()
+	testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, 1024).ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("oversized multipart body status %d, body %s", w.Code, w.Body)
+	}
+}
 func TestAnalyzeBadInputs(t *testing.T) {
 	h := testHandler([]llm.Analyzer{apiFake{"f", "m", true, apiJSON, nil}}, 100)
 	for _, data := range [][]byte{{1, 2, 3}, bytes.Repeat([]byte{1}, 101)} {
