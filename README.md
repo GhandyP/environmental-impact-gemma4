@@ -35,6 +35,19 @@ jupyter lab
 
 Open one of the notebooks and run all cells.
 
+## Go demo service
+
+The same image → structured-assessment flow is also available as a servable
+Go REST API with a bilingual web UI — handy for live client demos without a
+notebook runtime. It runs hybrid routing (local Gemma via llama.cpp, Gemini
+fallback, or a keyless mock mode). See [`service/README.md`](service/README.md).
+
+```bash
+cd service
+go build -o eia-service ./cmd/server
+EIA_MOCK=1 ./eia-service   # open http://localhost:8080
+```
+
 ## Kaggle quick start
 
 1. Create a Kaggle notebook with GPU enabled.

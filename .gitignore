@@ -23,6 +23,10 @@ ENV/
 gemma4_eia_analysis.json
 environmental-impact-analysis-for-everyone.ipynb
 
+# Go service build artifacts
+service/eia-service
+service/eia
+
 # OS / editor
 .DS_Store
 Thumbs.db
