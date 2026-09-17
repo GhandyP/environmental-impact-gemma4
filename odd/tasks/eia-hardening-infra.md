@@ -63,5 +63,14 @@ entrega (Dockerfile, CI, Makefile, .env.example) y un PR. Decisiones de producto
 4. A: UI health re-render + revocar object URLs. ✅ [worker]
 5. C: Dockerfile + .dockerignore + Makefile + .env.example. ✅ (env.example → bloque export en README)
 6. C: CI workflow GitHub Actions. ✅ (checkout@v7, setup-go@v7)
-7. Commit por work unit + rama + push + PR. ⏳ [inline]
-8. Review nativo del candidato + verificación final. ⏳
+7. Commit por work unit + rama + push + PR. ✅ PR #1 abierto; CI verde en push y pull_request (jobs `test` y `docker`).
+8. Review nativo del candidato + verificación final. ✅ Dos receipts aprobados con authority burned:
+   `review-c6f21c750043818e` (rama) y `review-0fb136ae766e0bc0` (rama + fix de cache del CI).
+
+## Post-cierre
+
+- Fix extra: cache de módulos del CI (`cache-dependency-path: service/go.sum`) — la corrida previa emitía
+  `Restore cache failed` y re-descargaba dependencias; verificado sin anotaciones tras el fix.
+- Deuda informativa nueva (no bloqueante): `R3-multipart-total-body-cap` (`httpapi.go:84`) — el tope total del
+  body multipart usa `MaxImageBytes+1024` de holgura fija; revisar si conviene holgura proporcional o 413.
+- Merge del PR #1: pendiente de decisión del usuario (política ordinaria del repo).
