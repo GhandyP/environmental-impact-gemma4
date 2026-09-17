@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -58,14 +59,28 @@ func noisyPNGBytes() []byte {
 	}
 	return b.Bytes()
 }
+
+// filePart appends one file part to a multipart writer. It centralizes the
+// net/textproto MIMEHeader that multipart.Writer requires, so every test
+// builds parts the same way.
+func filePart(t *testing.T, mw *multipart.Writer, field, filename, contentType string, data []byte) {
+	t.Helper()
+	h := textproto.MIMEHeader{
+		"Content-Disposition": {fmt.Sprintf(`form-data; name=%q; filename=%q`, field, filename)},
+		"Content-Type":        {contentType},
+	}
+	part, err := mw.CreatePart(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatal(err)
+	}
+}
 func multipartRequest(t *testing.T, data []byte, lang string) *http.Request {
 	var b bytes.Buffer
 	mw := multipart.NewWriter(&b)
-	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition", `form-data; name="image"; filename="x.bin"`)
-	h.Set("Content-Type", "application/octet-stream")
-	part, _ := mw.CreatePart(h)
-	part.Write(data)
+	filePart(t, mw, "image", "x.bin", "application/octet-stream", data)
 	mw.WriteField("lang", lang)
 	mw.Close()
 	r := httptest.NewRequest(http.MethodPost, "/analyze", &b)
@@ -91,19 +106,7 @@ func TestAnalyzeMultipart(t *testing.T) {
 func TestAnalyzeMultipartBodyLimit(t *testing.T) {
 	var b bytes.Buffer
 	mw := multipart.NewWriter(&b)
-	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition", `form-data; name="image"; filename="large.png"`)
-	h.Set("Content-Type", "image/png")
-	part, err := mw.CreatePart(h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := part.Write(bytes.Repeat([]byte{1}, 4096)); err != nil {
-		t.Fatal(err)
-	}
-	if err := mw.WriteField("image", string(pngBytes())); err != nil {
-		t.Fatal(err)
-	}
+	filePart(t, mw, "image", "large.png", "image/png", bytes.Repeat([]byte{1}, 4096))
 	if err := mw.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -118,16 +121,7 @@ func TestAnalyzeMultipartBodyLimit(t *testing.T) {
 func TestAnalyzeMultipartEnvelopeSlack(t *testing.T) {
 	var b bytes.Buffer
 	mw := multipart.NewWriter(&b)
-	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition", `form-data; name="image"; filename="large.png"`)
-	h.Set("Content-Type", "image/png")
-	part, err := mw.CreatePart(h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := part.Write(bytes.Repeat([]byte{1}, 200<<10)); err != nil {
-		t.Fatal(err)
-	}
+	filePart(t, mw, "image", "large.png", "image/png", bytes.Repeat([]byte{1}, 200<<10))
 	if err := mw.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -142,27 +136,11 @@ func TestAnalyzeMultipartEnvelopeSlack(t *testing.T) {
 func TestAnalyzeMultipartEnvelopeAccepted(t *testing.T) {
 	var b bytes.Buffer
 	mw := multipart.NewWriter(&b)
-	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition", `form-data; name="image"; filename="a-very-long-image-filename-that-expands-the-envelope.png"`)
-	h.Set("Content-Type", "image/png")
-	part, err := mw.CreatePart(h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := part.Write(pngBytes()); err != nil {
-		t.Fatal(err)
-	}
+	filePart(t, mw, "image", "a-very-long-image-filename-that-expands-the-envelope.png", "image/png", pngBytes())
 	for i := 0; i < 3; i++ {
-		extra := make(textproto.MIMEHeader)
-		extra.Set("Content-Disposition", `form-data; name="extra-file"; filename="another-very-long-filename-that-expands-the-envelope-`+string(rune('a'+i))+`.txt"`)
-		extra.Set("Content-Type", "text/plain")
-		extraPart, err := mw.CreatePart(extra)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := extraPart.Write([]byte("extra")); err != nil {
-			t.Fatal(err)
-		}
+		filePart(t, mw, "extra-file",
+			"another-very-long-filename-that-expands-the-envelope-"+string(rune('a'+i))+".txt",
+			"text/plain", []byte("extra"))
 	}
 	for i := 0; i < 20; i++ {
 		if err := mw.WriteField("extra-"+strings.Repeat("x", 32)+string(rune('a'+i)), strings.Repeat("v", 1024)); err != nil {
