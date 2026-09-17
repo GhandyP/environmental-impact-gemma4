@@ -19,6 +19,13 @@ import (
 	"github.com/GhandyP/environmental-impact-gemma4/service/web"
 )
 
+const (
+	// multipartOverhead provides slack for multipart boundaries, headers, and extra fields.
+	multipartOverhead = 64 << 10
+	// jsonOverhead provides slack for the JSON envelope around the base64 image.
+	jsonOverhead = 4 << 10
+)
+
 type handler struct {
 	cfg       config.Config
 	analyzers []llm.Analyzer
@@ -37,11 +44,17 @@ func (h *handler) analyze(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	imageData, mime, lang, err := h.input(w, r)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err)
+		var maxBytesErr *http.MaxBytesError
+		status := http.StatusBadRequest
+		if errors.As(err, &maxBytesErr) {
+			status = http.StatusRequestEntityTooLarge
+			err = errors.New("request body is too large")
+		}
+		writeErr(w, status, err)
 		return
 	}
 	if int64(len(imageData)) > h.cfg.MaxImageBytes {
-		writeErr(w, http.StatusBadRequest, errors.New("image is too large"))
+		writeErr(w, http.StatusRequestEntityTooLarge, errors.New("image is too large"))
 		return
 	}
 	if _, _, err = image.DecodeConfig(bytes.NewReader(imageData)); err != nil {
@@ -83,8 +96,8 @@ func (h *handler) input(w http.ResponseWriter, r *http.Request) ([]byte, string,
 	lang := "en"
 	ct := r.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "multipart/form-data") {
-		r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxImageBytes+1024)
-		if err := r.ParseMultipartForm(h.cfg.MaxImageBytes + 1024); err != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxImageBytes+multipartOverhead)
+		if err := r.ParseMultipartForm(h.cfg.MaxImageBytes); err != nil {
 			return nil, "", lang, err
 		}
 		if formLang := r.FormValue("lang"); formLang != "" {
@@ -106,8 +119,12 @@ func (h *handler) input(w http.ResponseWriter, r *http.Request) ([]byte, string,
 		ImageB64 string `json:"image_b64"`
 		Lang     string `json:"lang"`
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxImageBytes+1024)
+	r.Body = http.MaxBytesReader(w, r.Body, int64(base64.StdEncoding.EncodedLen(int(h.cfg.MaxImageBytes)))+jsonOverhead)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return nil, "", lang, err
+		}
 		return nil, "", lang, errors.New("invalid JSON body")
 	}
 	if in.Lang != "" {

@@ -58,7 +58,7 @@ Responses request `application/json` output so parsing stays deterministic.
 
 | Route | Description |
 | --- | --- |
-| `POST /analyze` | multipart (`image` file + optional `lang=en|es`) or JSON body `{"image_b64": "...", "lang": "es"}`. Returns `{"provider","model","lang","analysis"}`; header `X-EIA-Provider`. Errors: 400 invalid input/image, 502 provider or parse failure, 503 no provider available, 504 timeout. |
+| `POST /analyze` | multipart (`image` file + optional `lang=en|es`) or JSON body `{"image_b64": "...", "lang": "es"}`. Returns `{"provider","model","lang","analysis"}`; header `X-EIA-Provider`. Errors: 400 invalid input, 413 payload too large, 502 provider or parse failure, 503 no provider available, 504 timeout. |
 | `GET /health` | `{"status":"ok","providers":[{"name","available","model"}...]}` |
 | `GET /` | Embedded bilingual web UI |
 
