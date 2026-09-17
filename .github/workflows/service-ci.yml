@@ -18,6 +18,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: service/go.mod
+          cache-dependency-path: service/go.sum
       - name: Build
         working-directory: service
         run: go build ./...
