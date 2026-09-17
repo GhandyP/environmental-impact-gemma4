@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EIA Service</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a2129; --panel2:#232c36; --line:#2e3a46;
+    --text:#e6edf3; --muted:#8b98a5; --accent:#4cc38a; --accent2:#58a6ff;
+    --low:#2da44e; --medium:#bf8700; --high:#d29922; --critical:#f85149;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  .wrap{max-width:880px;margin:0 auto;padding:24px 16px 64px}
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:14px}
+  .lang{display:flex;gap:6px}
+  .lang button{background:var(--panel2);color:var(--muted);border:1px solid var(--line);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px}
+  .lang button.on{color:var(--text);border-color:var(--accent);background:var(--panel)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-top:18px}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:border-color .15s}
+  .drop:hover,.drop.over{border-color:var(--accent2)}
+  .drop p{margin:6px 0;color:var(--muted)}
+  .preview{display:none;margin-top:14px;text-align:center}
+  .preview img{max-width:100%;max-height:340px;border-radius:8px;border:1px solid var(--line)}
+  .row{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  button.primary{background:var(--accent);color:#08120c;border:none;padding:10px 22px;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px}
+  button.primary:disabled{opacity:.5;cursor:not-allowed}
+  .health{font-size:13px;color:var(--muted);margin-left:auto}
+  .health .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#666;margin-right:6px}
+  .health .dot.ok{background:var(--accent)} .health .dot.bad{background:var(--critical)}
+  .status{margin-top:14px;display:none;padding:10px 14px;border-radius:8px;font-size:14px}
+  .status.err{display:block;background:#3d1d20;border:1px solid #6e2a30;color:#ffb3ab}
+  .status.info{display:block;background:#1c2c3d;border:1px solid #2d4a66;color:#9ecbff}
+  .badge{display:inline-block;padding:4px 14px;border-radius:999px;font-weight:700;font-size:14px;color:#0b0f14}
+  .badge.low{background:var(--low)} .badge.medium{background:var(--medium)}
+  .badge.high{background:#e3b341} .badge.critical{background:var(--critical)}
+  .meta{color:var(--muted);font-size:13px;margin-left:10px}
+  h2{font-size:15px;margin:20px 0 8px;color:var(--accent2);text-transform:uppercase;letter-spacing:.06em;font-size:12px}
+  .conf{height:8px;background:var(--panel2);border-radius:4px;margin-top:6px;overflow:hidden}
+  .conf i{display:block;height:100%;background:var(--accent)}
+  ul{margin:0;padding-left:20px} li{margin:3px 0}
+  .json{display:none;margin-top:16px}
+  .json pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;max-height:320px;font-size:12px}
+  .ghost{background:none;border:1px solid var(--line);color:var(--muted);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px}
+  .ghost:hover{color:var(--text);border-color:var(--accent2)}
+  footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Environmental Impact Assessment</h1>
+      <div class="sub" data-i18n="sub">Upload a site photo — get a structured risk analysis.</div>
+    </div>
+    <div class="lang">
+      <button id="btn-en" class="on">EN</button>
+      <button id="btn-es">ES</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="drop" id="drop">
+      <strong data-i18n="dropTitle">Drop an image here or click to choose</strong>
+      <p data-i18n="dropHint">JPG / PNG · up to 10 MB</p>
+      <input type="file" id="file" accept="image/jpeg,image/png" class="hidden">
+    </div>
+    <div class="preview" id="preview"><img id="img" alt="preview"></div>
+    <div class="row">
+      <button class="primary" id="go" disabled data-i18n="analyze">Analyze</button>
+      <span class="health"><span class="dot" id="dot"></span><span id="healthText">…</span></span>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card hidden" id="result">
+    <div class="row" style="margin-top:0">
+      <span class="badge" id="hazard">—</span>
+      <span class="meta" id="meta"></span>
+    </div>
+    <p id="summary" style="margin:14px 0 0"></p>
+    <div id="confWrap">
+      <h2 data-i18n="confidence">Confidence</h2>
+      <div class="conf"><i id="confBar" style="width:0%"></i></div>
+    </div>
+    <div id="lists"></div>
+    <div class="row">
+      <button class="ghost" id="dl" data-i18n="download">Download JSON</button>
+      <button class="ghost" id="toggleJson" data-i18n="raw">Raw JSON</button>
+    </div>
+    <div class="json" id="jsonWrap"><pre id="jsonPre"></pre></div>
+  </div>
+
+  <footer data-i18n="footer">Local-first: Gemma served on your machine when available, Gemini as fallback.</footer>
+</div>
+<script>
+"use strict";
+const D = {
+  en: {sub:"Upload a site photo — get a structured risk analysis.",
+    dropTitle:"Drop an image here or click to choose", dropHint:"JPG / PNG · up to 10 MB",
+    analyze:"Analyze", analyzing:"Analyzing…", confidence:"Confidence",
+    download:"Download JSON", raw:"Raw JSON",
+    lists:{visible_evidence:"Visible evidence", likely_impact_factors:"Likely impact factors",
+      likely_processes:"Likely processes", recommendations:"Recommendations", uncertainty:"Uncertainty"},
+    hz:{low:"Low", medium:"Medium", high:"High", critical:"Critical"},
+    noProvider:"No model provider available. Check /health.", fail:"Analysis failed: ",
+    healthOk:"Service up · providers: ", healthDown:"Service unreachable"},
+  es: {sub:"Subí una foto del sitio — recibí un análisis de riesgo estructurado.",
+    dropTitle:"Arrastrá una imagen acá o hacé clic para elegirla", dropHint:"JPG / PNG · hasta 10 MB",
+    analyze:"Analizar", analyzing:"Analizando…", confidence:"Confianza",
+    download:"Descargar JSON", raw:"JSON crudo",
+    lists:{visible_evidence:"Evidencia visible", likely_impact_factors:"Factores de impacto probables",
+      likely_processes:"Procesos probables", recommendations:"Recomendaciones", uncertainty:"Incertidumbre"},
+    hz:{low:"Bajo", medium:"Medio", high:"Alto", critical:"Crítico"},
+    noProvider:"No hay proveedor de modelo disponible. Mirá /health.", fail:"El análisis falló: ",
+    healthOk:"Servicio arriba · proveedores: ", healthDown:"Servicio inaccesible"}
+};
+let lang = "en", lastJSON = null;
+
+const $ = id => document.getElementById(id);
+function t(){ return D[lang]; }
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => { const v = t()[el.dataset.i18n]; if (v) el.textContent = v; });
+  $("btn-en").classList.toggle("on", lang === "en");
+  $("btn-es").classList.toggle("on", lang === "es");
+  $("go").textContent = lastJSON ? t().analyze : $("go").textContent;
+}
+$("btn-en").onclick = () => { lang = "en"; applyLang(); renderLists(); };
+$("btn-es").onclick = () => { lang = "es"; applyLang(); renderLists(); };
+
+const drop = $("drop"), file = $("file");
+drop.onclick = () => file.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) pick(e.dataTransfer.files[0]); };
+file.onchange = () => { if (file.files[0]) pick(file.files[0]); };
+let picked = null;
+function pick(f){
+  if (!/^image\/(jpeg|png)$/.test(f.type)) { show(t().fail + "unsupported file type", true); return; }
+  picked = f;
+  $("img").src = URL.createObjectURL(f);
+  $("preview").style.display = "block";
+  $("go").disabled = false;
+}
+
+$("go").onclick = async () => {
+  if (!picked) return;
+  $("go").disabled = true; $("go").textContent = t().analyzing;
+  show("", false); $("result").classList.add("hidden");
+  const fd = new FormData();
+  fd.append("image", picked, picked.name);
+  fd.append("lang", lang);
+  try {
+    const r = await fetch("/analyze", {method:"POST", body:fd});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    lastJSON = j; renderResult(j);
+  } catch (err) {
+    show(String(err.message || err).startsWith(t().fail) ? err.message : t().fail + (err.message || err), true);
+  } finally {
+    $("go").disabled = false; $("go").textContent = t().analyze;
+  }
+};
+
+function renderResult(j){
+  const a = j.analysis || {};
+  const hz = a.hazard_level || "low";
+  const el = $("hazard");
+  el.textContent = (t().hz[hz] || hz) + " · " + hz;
+  el.className = "badge " + hz;
+  $("meta").textContent = (j.provider || "?") + " · " + (j.model || "");
+  $("summary").textContent = a.summary || "";
+  const c = Math.max(0, Math.min(1, Number(a.confidence) || 0));
+  $("confBar").style.width = (c * 100).toFixed(0) + "%";
+  renderLists(a);
+  $("jsonPre").textContent = JSON.stringify(a, null, 2);
+  $("result").classList.remove("hidden");
+}
+function renderLists(a){
+  if (!lastJSON) return;
+  a = a || (lastJSON.analysis || {});
+  const L = t().lists;
+  const defs = [["visible_evidence", a.visible_evidence], ["likely_impact_factors", a.likely_impact_factors],
+    ["likely_processes", a.likely_processes], ["recommendations", a.recommendations], ["uncertainty", a.uncertainty]];
+  $("lists").innerHTML = defs.map(([k, arr]) =>
+    (arr && arr.length) ? `<h2>${L[k]}</h2><ul>${arr.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "").join("");
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+$("dl").onclick = () => {
+  if (!lastJSON) return;
+  const blob = new Blob([JSON.stringify(lastJSON, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "gemma4_eia_analysis.json"; a.click();
+};
+$("toggleJson").onclick = () => $("jsonWrap").classList.toggle("hidden");
+
+fetch("/health").then(r => r.json()).then(j => {
+  const names = (j.providers || []).filter(p => p.available).map(p => p.name);
+  $("dot").className = "dot ok";
+  $("healthText").textContent = t().healthOk + (names.join(", ") || "—");
+}).catch(() => { $("dot").className = "dot bad"; $("healthText").textContent = t().healthDown; });
+applyLang();
+</script>
+</body>
+</html>
