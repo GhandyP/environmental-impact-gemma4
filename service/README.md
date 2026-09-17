@@ -80,6 +80,27 @@ The `analysis` object mirrors the notebook schema exactly (English keys):
 | `EIA_MAX_IMAGE_BYTES` | `10485760` | Image size cap (bytes) |
 | `EIA_PROVIDER_TIMEOUT` | `120s` | Per-request provider timeout |
 
+Copy-paste example:
+
+```bash
+# Demo mode: no GPU, no keys, deterministic answers
+export EIA_MOCK=1
+export EIA_ADDR=:8080
+
+# Local Gemma via llama.cpp (leave EIA_LLAMA_BASE_URL empty to disable)
+export EIA_LLAMA_BASE_URL=http://127.0.0.1:8081
+export EIA_LLAMA_MODEL=gemma-4-E2B-it
+
+# Gemini cloud (GEMINI_API_KEY takes precedence over GOOGLE_API_KEY)
+export GEMINI_API_KEY=
+export GOOGLE_API_KEY=
+export EIA_GEMINI_MODEL=gemini-flash-latest
+
+# Limits
+export EIA_MAX_IMAGE_BYTES=10485760
+export EIA_PROVIDER_TIMEOUT=120s
+```
+
 ## Development
 
 ```bash
