@@ -44,6 +44,34 @@ EIA_LLAMA_BASE_URL=http://127.0.0.1:8081 EIA_ADDR=:8080 ./eia-service
 The service checks `GET {base}/health`; when the local server is down or
 unconfigured, requests fall back to Gemini (if a key is set).
 
+### Verified local recipe
+
+This exact combination was exercised end to end against the real model
+(response: `provider: "local"`, valid 8-key analysis, ~8 min per image on
+4 CPU cores):
+
+```bash
+# build llama.cpp, then serve Gemma 4 E2B with its vision projector
+llama-server \
+  -m ~/models/gemma-4-E2B/gemma-4-E2B-it-Q4_0.gguf \
+  --mmproj ~/models/gemma-4-E2B/mmproj-gemma-4-E2B-it-Q8_0.gguf \
+  --host 127.0.0.1 --port 8081 -c 4096 -t 4 \
+  --reasoning off --reasoning-budget 0
+
+EIA_LLAMA_BASE_URL=http://127.0.0.1:8081 \
+EIA_PROVIDER_TIMEOUT=25m \
+./eia-service
+```
+
+Two settings matter on CPU:
+
+- **`--reasoning off --reasoning-budget 0`** — without it Gemma 4 spends the
+  whole token budget on `reasoning_content` and never emits the JSON analysis.
+- **`EIA_PROVIDER_TIMEOUT=25m`** — vision inference on CPU runs at ~0.4 tok/s;
+  the 120s default is far too short and produces `504`.
+
+`--mmproj` is required for images; without the projector the model is text-only.
+
 ## Gemini cloud mode
 
 ```bash

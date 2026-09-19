@@ -19,6 +19,7 @@ import (
 
 	"github.com/GhandyP/environmental-impact-gemma4/service/internal/config"
 	"github.com/GhandyP/environmental-impact-gemma4/service/internal/llm"
+	"github.com/GhandyP/environmental-impact-gemma4/service/web"
 )
 
 type apiFake struct {
@@ -238,5 +239,31 @@ func TestHealthAndHome(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !strings.Contains(w.Body.String(), "EIA Service") {
 		t.Error("missing title")
+	}
+}
+
+// TestUIReferencesOnlyDefinedIdentifiers guards against the class of bug that
+// broke the analyze button in the browser: the inline script called a `show()`
+// helper that was never defined, so the click handler threw before reaching
+// fetch and the request was never sent. curl-based tests could not see it.
+func TestUIRendersAndDefinesItsHandlers(t *testing.T) {
+	html := web.IndexHTML()
+	for _, want := range []string{
+		`id="go"`, `id="file"`, `id="status"`, `id="toggleJson"`, `id="jsonWrap"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("UI is missing element %s", want)
+		}
+	}
+	// Every function the handlers call must be declared in the script.
+	for _, fn := range []string{"show", "pick", "renderResult", "renderLists", "renderHealth", "applyLang", "esc"} {
+		if !strings.Contains(html, "function "+fn+"(") && !strings.Contains(html, "const "+fn+" =") {
+			t.Errorf("UI calls %s() but never declares it", fn)
+		}
+	}
+	// The raw JSON panel must be reachable: it starts hidden via .json and the
+	// toggle needs an explicit rule that makes it visible again.
+	if !strings.Contains(html, ".json.open") {
+		t.Error("UI has no .json.open rule, so the raw JSON toggle can never reveal the panel")
 	}
 }
