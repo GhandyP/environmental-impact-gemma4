@@ -65,12 +65,23 @@ EIA_PROVIDER_TIMEOUT=25m \
 
 Two settings matter on CPU:
 
-- **`--reasoning off --reasoning-budget 0`** — without it Gemma 4 spends the
-  whole token budget on `reasoning_content` and never emits the JSON analysis.
+- **`--reasoning off --reasoning-budget 0`** — recommended when you control the
+  server. The service also pins `reasoning_effort: "none"` on every local
+  request, so a server started without these flags still returns the JSON
+  analysis instead of spending the budget on `reasoning_content`.
 - **`EIA_PROVIDER_TIMEOUT=25m`** — vision inference on CPU runs at ~0.4 tok/s;
   the 120s default is far too short and produces `504`.
 
 `--mmproj` is required for images; without the projector the model is text-only.
+
+### Reasoning is disabled per request
+
+The local provider sends `reasoning_effort: "none"` with every
+`/v1/chat/completions` call. Verified against a real `llama-server` started
+*without* `--reasoning off`: the same prompt returned 29 words of
+`reasoning_content` by default, and 2 completion tokens with no reasoning when
+the field was present. This keeps the service correct regardless of how the
+server was launched.
 
 ## Gemini cloud mode
 
