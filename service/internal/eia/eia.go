@@ -53,14 +53,18 @@ func (l *listField) UnmarshalJSON(data []byte) error {
 	if trimmed[0] == '[' {
 		var items []string
 		if err := json.Unmarshal(trimmed, &items); err != nil {
-			// Tolerate arrays holding non-string scalars by re-encoding each element.
+			// Mixed arrays: keep the scalars as text and drop anything nested.
+			// A nested object inside a list of strings would otherwise become
+			// noise like "map[a:1]", which is worse than omitting it (R3-lenient-object-elements).
 			var raw []json.RawMessage
 			if err2 := json.Unmarshal(trimmed, &raw); err2 != nil {
 				return err
 			}
 			items = make([]string, 0, len(raw))
 			for _, r := range raw {
-				items = append(items, scalarToString(r))
+				if text, ok := scalarText(r); ok {
+					items = append(items, text)
+				}
 			}
 		}
 		*l = items
@@ -77,18 +81,30 @@ func (l *listField) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("expected a string or an array of strings, got %s", string(trimmed))
 }
 
-// scalarToString renders a JSON scalar as text so a stray number or boolean in
-// a list does not sink the analysis.
-func scalarToString(raw json.RawMessage) string {
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		return s
+// scalarText renders a JSON scalar as text. Nested objects and arrays report
+// ok=false so callers can drop them instead of stringifying structure into
+// unreadable text.
+func scalarText(raw json.RawMessage) (string, bool) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return "", false
 	}
-	var v any
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return strings.TrimSpace(string(raw))
+	switch trimmed[0] {
+	case '{', '[':
+		return "", false
+	case '"':
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err != nil {
+			return "", false
+		}
+		return s, true
+	default:
+		var v any
+		if err := json.Unmarshal(trimmed, &v); err != nil {
+			return "", false
+		}
+		return fmt.Sprint(v), true
 	}
-	return strings.TrimSpace(fmt.Sprint(v))
 }
 
 func (a *Analysis) Normalize() {
