@@ -43,6 +43,7 @@
   .conf i{display:block;height:100%;background:var(--accent)}
   ul{margin:0;padding-left:20px} li{margin:3px 0}
   .json{display:none;margin-top:16px}
+  .json.open{display:block}
   .json pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;max-height:320px;font-size:12px}
   .ghost{background:none;border:1px solid var(--line);color:var(--muted);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px}
   .ghost:hover{color:var(--text);border-color:var(--accent2)}
@@ -162,6 +163,14 @@ function pick(f){
   $("go").disabled = false;
 }
 
+// show renders an inline message above the result area. Errors use the
+// dedicated error styling; an empty message clears the area.
+function show(message, isError) {
+  const el = $("status");
+  el.textContent = message;
+  el.className = message ? "status " + (isError ? "err" : "info") : "status";
+}
+
 $("go").onclick = async () => {
   if (!picked) return;
   $("go").disabled = true; $("go").textContent = t().analyzing;
@@ -214,7 +223,7 @@ $("dl").onclick = () => {
   a.href = url; a.download = "gemma4_eia_analysis.json"; a.click();
   URL.revokeObjectURL(url);
 };
-$("toggleJson").onclick = () => $("jsonWrap").classList.toggle("hidden");
+$("toggleJson").onclick = () => $("jsonWrap").classList.toggle("open");
 
 fetch("/health").then(r => r.json()).then(j => {
   healthState.providers = (j.providers || []).filter(p => p.available).map(p => p.name);
