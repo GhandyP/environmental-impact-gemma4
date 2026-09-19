@@ -60,7 +60,8 @@ Brechas de verificación detectadas (declaradas al usuario, no ocultas):
 5. Probar la UI en navegador real (Playwright, EN/ES). ⏳
 6. Arreglar defectos encontrados + tests de regresión. ⏳
 7. Actualizar README con la receta verificada. ⏳
-8. Commit por work unit + push + review. ⏳
+8. Commit por work unit + push + PR #3 + review. ✅ PR #3 MERGEADO (rebase), review 28a2b9dac16826a5 aprobado y quemado, CI verde
+   (test + docker), ramas podadas, main = f8b2396.
 
 ## Hallazgos
 
