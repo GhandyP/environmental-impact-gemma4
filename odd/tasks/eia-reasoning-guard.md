@@ -51,7 +51,7 @@ Soporte confirmado en el código de llama.cpp (`tools/server/server-common.cpp:1
 2. Fix provider local + test. ✅
 3. Fix elementos anidados + test. ✅
 4. Docs (README servicio). ✅
-5. Commits + push + PR + review. ⏳
+5. Commits + push + PR #4 + review. ✅ PR #4 MERGEADO (rebase), review review-60325df55c22b7e2 aprobado sin hallazgos y quemado, CI verde (test 18s + docker 43s). main = 236f6dd.
 
 ## Notas
 
