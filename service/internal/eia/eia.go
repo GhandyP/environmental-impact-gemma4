@@ -1,6 +1,7 @@
 package eia
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,14 +28,67 @@ func ParseLang(s string) (Lang, error) {
 }
 
 type Analysis struct {
-	HazardLevel         string   `json:"hazard_level"`
-	Summary             string   `json:"summary"`
-	VisibleEvidence     []string `json:"visible_evidence"`
-	LikelyImpactFactors []string `json:"likely_impact_factors"`
-	LikelyProcesses     []string `json:"likely_processes"`
-	Recommendations     []string `json:"recommendations"`
-	Uncertainty         []string `json:"uncertainty"`
-	Confidence          float64  `json:"confidence"`
+	HazardLevel         string    `json:"hazard_level"`
+	Summary             string    `json:"summary"`
+	VisibleEvidence     listField `json:"visible_evidence"`
+	LikelyImpactFactors listField `json:"likely_impact_factors"`
+	LikelyProcesses     listField `json:"likely_processes"`
+	Recommendations     listField `json:"recommendations"`
+	Uncertainty         listField `json:"uncertainty"`
+	Confidence          float64   `json:"confidence"`
+}
+
+// listField decodes a JSON value that a model may emit either as an array of
+// strings or as a single string. Local models routinely collapse one-item
+// lists, so accepting both keeps a real response from failing the whole
+// analysis; anything else is still a schema error.
+type listField []string
+
+func (l *listField) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		*l = nil
+		return nil
+	}
+	if trimmed[0] == '[' {
+		var items []string
+		if err := json.Unmarshal(trimmed, &items); err != nil {
+			// Tolerate arrays holding non-string scalars by re-encoding each element.
+			var raw []json.RawMessage
+			if err2 := json.Unmarshal(trimmed, &raw); err2 != nil {
+				return err
+			}
+			items = make([]string, 0, len(raw))
+			for _, r := range raw {
+				items = append(items, scalarToString(r))
+			}
+		}
+		*l = items
+		return nil
+	}
+	if trimmed[0] == '"' {
+		var single string
+		if err := json.Unmarshal(trimmed, &single); err != nil {
+			return err
+		}
+		*l = []string{single}
+		return nil
+	}
+	return fmt.Errorf("expected a string or an array of strings, got %s", string(trimmed))
+}
+
+// scalarToString renders a JSON scalar as text so a stray number or boolean in
+// a list does not sink the analysis.
+func scalarToString(raw json.RawMessage) string {
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return strings.TrimSpace(string(raw))
+	}
+	return strings.TrimSpace(fmt.Sprint(v))
 }
 
 func (a *Analysis) Normalize() {
