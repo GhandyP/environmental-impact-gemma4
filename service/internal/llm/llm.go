@@ -58,6 +58,29 @@ func (p *local) Available(ctx context.Context) bool {
 func (p *local) Info() ProviderInfo {
 	return ProviderInfo{p.Name(), p.Available(context.Background()), p.model}
 }
+
+// localRequestBody builds the OpenAI-compatible payload sent to llama-server.
+//
+// reasoning_effort is pinned to "none" on purpose. Verified against a real
+// llama.cpp server started WITHOUT --reasoning off: without this field Gemma 4
+// spends the whole token budget on reasoning_content and never emits the JSON
+// analysis, which the service then reports as a parse failure. Sending it per
+// request makes the service independent of how the server was launched.
+func localRequestBody(model, prompt, mime string, image []byte) map[string]any {
+	return map[string]any{
+		"model":            model,
+		"reasoning_effort": "none",
+		"max_tokens":       512,
+		"messages": []any{map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{"type": "image_url", "image_url": map[string]string{"url": "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(image)}},
+				map[string]any{"type": "text", "text": prompt},
+			},
+		}},
+	}
+}
+
 func (p *local) Generate(ctx context.Context, prompt string, image []byte, mime string) (string, error) {
 	if p.base == "" {
 		return "", errors.New("local provider unavailable")
@@ -65,7 +88,7 @@ func (p *local) Generate(ctx context.Context, prompt string, image []byte, mime 
 	if mime == "" {
 		mime = "image/jpeg"
 	}
-	body := map[string]any{"model": p.model, "messages": []any{map[string]any{"role": "user", "content": []any{map[string]any{"type": "image_url", "image_url": map[string]string{"url": "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(image)}}, map[string]any{"type": "text", "text": prompt}}}}, "max_tokens": 512}
+	body := localRequestBody(p.model, prompt, mime, image)
 	b, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.base+"/v1/chat/completions", bytes.NewReader(b))
 	if err != nil {

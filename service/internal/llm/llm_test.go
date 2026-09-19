@@ -54,6 +54,12 @@ func TestLocalGenerateAndAvailable(t *testing.T) {
 	if json.Unmarshal(got, &decoded) != nil {
 		t.Error("invalid request JSON")
 	}
+	// Verified against a real llama-server started without --reasoning off:
+	// without this field Gemma 4 burns the whole budget on reasoning_content
+	// and never emits the JSON analysis.
+	if effort, _ := decoded["reasoning_effort"].(string); effort != "none" {
+		t.Errorf("local request must disable reasoning, got reasoning_effort=%v", decoded["reasoning_effort"])
+	}
 	closed := httptest.NewServer(http.NotFoundHandler())
 	url := closed.URL
 	closed.Close()
